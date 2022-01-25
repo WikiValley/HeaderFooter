@@ -4,12 +4,10 @@
  */
 class HeaderFooter
 {
-	/**
-	 * Main Hook
-	 */
-	public static function hOutputPageParserOutput( &$op, $parserOutput ) {
 
-		$action = $op->parserOptions()->getUser()->getRequest()->getVal("action");
+	public static function hOutputPageParserOutput( OutputPage $op, ParserOutput $parserOutput ): bool {
+
+		$action = $op->getRequest()->getVal("action");
 		if ( ($action == 'edit') || ($action == 'submit') || ($action == 'history') ) {
 			return true;
 		}
