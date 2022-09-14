@@ -35,7 +35,8 @@
 	"config": {
 		"_prefix": "eg",
 		"HeaderFooterEnableAsyncHeader": false,
-		"HeaderFooterEnableAsyncFooter": false
+		"HeaderFooterEnableAsyncFooter": false,
+		"HeaderFooterNamespace": 8
 	},
 	"manifest_version": 1
 }

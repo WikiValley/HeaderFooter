@@ -7,6 +7,8 @@ class HeaderFooter
 
 	public static function hOutputPageParserOutput( OutputPage $op, ParserOutput $parserOutput ): bool {
 
+		global $egHeaderFooterEnableAsyncHeader, $egHeaderFooterEnableAsyncFooter, $egHeaderFooterNamespace;
+
 		$action = $op->getRequest()->getVal("action");
 		if ( ($action == 'edit') || ($action == 'submit') || ($action == 'history') ) {
 			return true;
@@ -16,17 +18,17 @@ class HeaderFooter
 
 		$ns = $wgTitle->getNsText();
 		$name = $wgTitle->getPrefixedDBKey();
+		$namespace = $egHeaderFooterNamespace;
 
 		$text = $parserOutput->getText();
 
-		$nsheader = self::conditionalInclude( $text, '__NONSHEADER__', 'hf-nsheader', $ns );
-		$header   = self::conditionalInclude( $text, '__NOHEADER__',   'hf-header', $name );
-		$footer   = self::conditionalInclude( $text, '__NOFOOTER__',   'hf-footer', $name );
-		$nsfooter = self::conditionalInclude( $text, '__NONSFOOTER__', 'hf-nsfooter', $ns );
+		$nsheader = self::conditionalInclude( $text, '__NONSHEADER__', 'hf-nsheader', $ns, $namespace );
+		$header   = self::conditionalInclude( $text, '__NOHEADER__',   'hf-header', $name, $namespace );
+		$footer   = self::conditionalInclude( $text, '__NOFOOTER__',   'hf-footer', $name, $namespace );
+		$nsfooter = self::conditionalInclude( $text, '__NONSFOOTER__', 'hf-nsfooter', $ns, $namespace );
 
 		$parserOutput->setText( $nsheader . $header . $text . $footer . $nsfooter );
 
-		global $egHeaderFooterEnableAsyncHeader, $egHeaderFooterEnableAsyncFooter;
 		if ( $egHeaderFooterEnableAsyncFooter || $egHeaderFooterEnableAsyncHeader ) {
 			$op->addModules( 'ext.headerfooter.dynamicload' );
 		}
@@ -37,7 +39,7 @@ class HeaderFooter
 	/**
 	 * Verifies & Strips ''disable command'', returns $content if all OK.
 	 */
-	static function conditionalInclude( &$text, $disableWord, $class, $unique ) {
+	static function conditionalInclude( &$text, $disableWord, $class, $unique, $namespace ) {
 
 		// is there a disable command lurking around?
 		$disable = strpos( $text, $disableWord ) !== false;
@@ -65,8 +67,39 @@ class HeaderFooter
 			// Just drop an empty div into the page. Will fill it with async
 			// request after page load
 			return $div . '</div>';
-		}
-		else {
+		} elseif( $namespace !== NS_MEDIAWIKI ) {
+			$title = Title::makeTitleSafe( $namespace, $msgId );
+			if( $title === null ) {
+				return '';
+			}
+
+			// Use a new parser to avoid interfering with the current parser.
+			$page = RequestContext::getMain()->getTitle();
+			$parser = MediaWiki\MediaWikiServices::getInstance()->getParserFactory()->create();
+			$parser->startExternalParse( $page, ParserOptions::newFromContext( RequestContext::getMain() ), Parser::OT_HTML );
+			$revision = Article::newFromTitle( $title, RequestContext::getMain() )->getPage()->getRevisionRecord();
+			if ( !$revision ) {
+				// Should not happen
+				return '';
+			}
+			$content = $revision->getContent( MediaWiki\Revision\SlotRecord::MAIN );
+			if ( !( $content instanceof TextContent ) ) {
+				// Not implemented on non-text contents
+				return '';
+			}
+			$msgText = $parser->parse(
+				$content->getText(),
+				$page,
+				$parser->mOptions
+			)->getText();
+
+			// don't need to bother if there is no content.
+			if ( empty( $msgText ) ) {
+				return '';
+			}
+
+			return $div . $msgText . '</div>';
+		} else {
 			$msgText = wfMessage( $msgId )->parse();
 
 			// don't need to bother if there is no content.
